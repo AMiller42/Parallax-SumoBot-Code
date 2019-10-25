@@ -24,23 +24,9 @@ lEnemyIn       PIN     11                       ' Left IR detector to P11
 rEnemyOut      PIN     15                       ' Right IR LED connected to P15
 rEnemyIn       PIN     14                       ' Right IR detector to P14
 
-DummyPin       PIN     6                        ' I/O pin for pulse-decay P6
-
 LedSpeaker     PIN     5                        ' LED & speaker connected to P5
 
 ' -----[ Constants ]-----------------------------------------------------------
-
-' SumoBot maneuvers
-
-Forward        CON     0                        ' Left Fwd Fast; Right Fwd Fast
-Backward       CON     1                        ' Left Rev Fast; Right Rev Fast
-RotateLeft     CON     2                        ' Left Rev Fast; Right Fwd Fast
-RotateRight    CON     3                        ' Left Fwd Fast; Right Rev Fast
-PivotLeft      CON     4                        ' Left Stop;     Right Fwd Fast
-PivotRight     CON     5                        ' Left Fwd Fast; Right Stop
-CurveLeft      CON     6                        ' Left Fwd Slow; Right Fwd Fast
-CurveRight     CON     7                        ' Left Fwd Fast; Right Fwd Slow
-LookAround     CON     8                        ' Move around pseudorandomly
 
 ' Servo pulse width rotations
 
@@ -49,10 +35,6 @@ Slow_CCW       CON     800                      ' Low speed counterclockwise
 NO_ROT         CON     750                      ' No rotation
 Slow_CW        CON     700                      ' Low speed clockwise
 Fast_CW        CON     500                      ' Full speed clockwise
-
-' IR object detectors
-
-IrFreq         CON     38500                    ' IR LED frequency
 
 ' -----[ Variables ]-----------------------------------------------------------
 
