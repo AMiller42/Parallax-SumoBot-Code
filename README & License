@@ -1,0 +1,18 @@
+This program was written by and is the sole intellectual property 
+of myself, Aaron Miller.
+
+If you wish to use this code yourself and it is to be viewed by others,
+please credit me. DO NOT USE THIS CODE IN AN ACTUAL SUMOBOT COMPETITION.
+This is not only unethical, it is against the rules of the competition.
+
+Other than that, please feel free to use this code as inspiration for
+your own efforts, or to learn from.
+
+I learned how to code in PBASIC from these official manuals:
+
+https://www.parallax.com/sites/default/files/downloads/27218-Web-BASICStampManual-v2.2.pdf
+
+https://www.parallax.com/sites/default/files/downloads/27400-SumoBot-Manual-v2.1.pdf
+
+as well as from the official sample code snippets, which are included
+along with my own code.
