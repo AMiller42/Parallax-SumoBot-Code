@@ -1,0 +1,306 @@
+' {$STAMP BS2}
+' {$PBASIC 2.5}
+
+' Program created by Aaron Miller. Finished 10/18/2019
+
+' Final program for SumoBot competition at Buckeye Career Center.
+' Program both moves around the arena without going off the edge
+' as well as pushes opponent off the edge.
+
+' -----[ I/O Definitions ]-----------------------------------------------------
+
+lMotor         PIN     13                       ' Left servo connected to P13
+rMotor         PIN     12                       ' Right servo connected to P12
+
+lLinePwr       PIN     10                       ' Left line sensor on/off pin P10
+lLineIn        PIN     9                        ' Left line sensor signal pin P9
+
+rLinePwr       PIN     7                        ' Right line sensor on/off pin P7
+rLineIn        PIN     8                        ' Right line sensor signal pin P8
+
+lEnemyOut      PIN     4                        ' Left IR LED connected to P4
+lEnemyIn       PIN     11                       ' Left IR detector to P11
+
+rEnemyOut      PIN     15                       ' Right IR LED connected to P15
+rEnemyIn       PIN     14                       ' Right IR detector to P14
+
+DummyPin       PIN     6                        ' I/O pin for pulse-decay P6
+
+LedSpeaker     PIN     5                        ' LED & speaker connected to P5
+
+' -----[ Constants ]-----------------------------------------------------------
+
+' SumoBot maneuvers
+
+Forward        CON     0                        ' Left Fwd Fast; Right Fwd Fast
+Backward       CON     1                        ' Left Rev Fast; Right Rev Fast
+RotateLeft     CON     2                        ' Left Rev Fast; Right Fwd Fast
+RotateRight    CON     3                        ' Left Fwd Fast; Right Rev Fast
+PivotLeft      CON     4                        ' Left Stop;     Right Fwd Fast
+PivotRight     CON     5                        ' Left Fwd Fast; Right Stop
+CurveLeft      CON     6                        ' Left Fwd Slow; Right Fwd Fast
+CurveRight     CON     7                        ' Left Fwd Fast; Right Fwd Slow
+LookAround     CON     8                        ' Move around pseudorandomly
+
+' Servo pulse width rotations
+
+Fast_CCW       CON     1000                     ' Full speed counterclockwise
+Slow_CCW       CON     800                      ' Low speed counterclockwise
+NO_ROT         CON     750                      ' No rotation
+Slow_CW        CON     700                      ' Low speed clockwise
+Fast_CW        CON     500                      ' Full speed clockwise
+
+' IR object detectors
+
+IrFreq         CON     38500                    ' IR LED frequency
+
+' -----[ Variables ]-----------------------------------------------------------
+
+lLine        VAR        Word                    ' left sensor raw reading
+rLine        VAR        Word                    ' right sensor raw reading
+sensors      VAR        Byte                    ' sensor value for desicions
+lineBits     VAR        sensors.NIB1            ' decoded line sensors value
+enemyBits    VAR        sensors.NIB0            ' decoded enemy sensors value
+lLineBool    VAR        lineBits.BIT1           ' T/F does lLineIn see Tawara
+rLineBool    VAR        lineBits.BIT0           ' T/F does rLineIn see Tawara
+lEnemyBool   VAR        enemyBits.BIT1          ' T/F does lEnemyIn see opponent
+rEnemyBool   VAR        enemyBits.BIT0          ' T/F does rEnemyIn see opponent
+move         VAR        Byte                    ' Number of maneuver to execute
+lastSeen     VAR        Bit                     ' Which side the enemy was last on
+
+pulses       VAR        Byte                    ' counter for motor control
+temp         VAR        Byte                    ' temporary variable
+multi        VAR        Byte                    ' multipurpose variable
+flipflop     VAR        Byte                    ' keeps track of T Flip-Flop
+rndm_Num     VAR        Word                    ' Number used for randomness
+bool         VAR        Bit                     ' Multipurpose boolean value
+start        VAR        Bit
+
+' Wherever left and right are indicated by a bit variable, 0 = left, 1 = right
+
+' -----[ EEPROM Data ]---------------------------------------------------------
+
+RunStatus    DATA       $00                     ' run status
+
+' -----[ Initialization ]------------------------------------------------------
+
+  ' Turns button into a T Flip-Flop
+IF start = 0 THEN
+  READ RunStatus, flipflop
+  flipflop = ~flipflop
+  WRITE RunStatus, flipflop
+  PAUSE 5
+  IF flipflop < 1 THEN
+    DEBUG "Off"
+    END
+  ENDIF
+  DEBUG CLS, "On"
+  PAUSE 5
+
+  LOW lMotor
+  LOW rMotor
+  FOR pulses = 1 TO 5                           ' Counts off 5 seconds.
+    PAUSE 1000
+    FREQOUT LedSpeaker, 5, 4000
+  NEXT
+start = 1
+GOTO Start_Match
+ENDIF
+
+' -----[ Main Routine ]--------------------------------------------------------
+
+Main:
+  DO
+    GOSUB Movement
+    GOSUB Read_IR_Sensor
+    GOSUB Read_Line_Sensor
+  LOOP
+GOTO Main
+
+' -----[ Subroutine - Movement ]-----------------------------------------------
+
+Movement:
+  SELECT sensors                              ' Execute only if lineBits = 0
+    CASE %0001
+      FOR pulses = 1 TO 11
+      DEBUG "right"
+        PULSOUT lMotor, Fast_CCW              ' Turn right
+        PULSOUT rMotor, Fast_CCW
+        GOSUB Read_IR_Sensor
+        IF sensors > 0 THEN RETURN
+      NEXT
+      lastSeen = 1
+    CASE %0010
+      FOR pulses = 1 TO 11
+      DEBUG "left"
+        PULSOUT lMotor, Fast_CW               ' Turn left
+        PULSOUT rMotor, Fast_CW
+        GOSUB Read_IR_Sensor
+        IF sensors > 0 THEN RETURN
+      NEXT
+      lastSeen = 0
+    CASE %0011
+      FOR pulses = 1 TO 25
+      DEBUG "forward"
+        PULSOUT lMotor, Fast_CCW              ' Go forward
+        PULSOUT rMotor, Fast_CW
+        GOSUB Read_Line_Sensor
+        IF lineBits > 0 THEN RETURN
+      NEXT
+    CASE ELSE
+      SELECT lineBits
+        CASE %00
+          GOSUB Look_Around
+        CASE %01
+          GOSUB Tawara_On_Right
+        CASE %10
+          GOSUB Tawara_On_Left
+        CASE %11
+          GOSUB About_Face
+      ENDSELECT
+  ENDSELECT
+RETURN
+
+' -----[ Subroutine - Look_Around ]--------------------------------------------
+
+ Look_Around:
+DEBUG "Start Look Around.", CR
+    FOR temp = 1 TO 2
+      FOR pulses = 1 TO 7
+        PULSOUT lMotor, Fast_CW
+        PULSOUT rMotor, Fast_CW
+        PAUSE 10
+      NEXT
+
+      GOSUB Read_IR_Sensor
+      IF sensors > 0 THEN RETURN
+    NEXT
+
+    IF lastSeen = 0 THEN
+      FOR temp = 1 TO 6
+        FOR pulses = 1 TO 10
+          PULSOUT lMotor, Slow_CCW
+          PULSOUT rMotor, Fast_CW
+          PAUSE 10
+          PULSOUT lMotor, NO_ROT
+          PULSOUT rMotor, Fast_CW
+          PAUSE 10
+        NEXT
+        GOSUB Read_IR_Sensor
+        IF sensors > 0 THEN RETURN
+      NEXT
+
+    ELSE
+      FOR temp = 1 TO 6
+        FOR pulses = 1 TO 10
+          PULSOUT lMotor, Fast_CCW
+          PULSOUT rMotor, Slow_CW
+          PAUSE 10
+          PULSOUT lMotor, Fast_CCW
+          PULSOUT rMotor, NO_ROT
+          PAUSE 10
+        NEXT
+        GOSUB Read_IR_Sensor
+        IF sensors > 0 THEN RETURN
+      NEXT
+    ENDIF
+RETURN
+
+' -----[ Subroutine - About_Face ]---------------------------------------------
+
+About_Face:
+DEBUG "About face.", CR
+
+  FOR pulses = 1 TO 10
+    PULSOUT lMotor, Fast_CW
+    PULSOUT rMotor, Fast_CCW
+    PAUSE 15
+  NEXT
+
+  FOR temp = 1 TO 4
+    FOR pulses = 1 TO 7
+      PULSOUT lMotor, Fast_CCW
+      PULSOUT rMotor, Fast_CCW
+      PAUSE 10
+    NEXT
+    GOSUB Read_IR_Sensor
+    IF sensors > 0 THEN RETURN
+  NEXT
+RETURN
+
+' -----[ Subroutine - Tawara_On_Left ]-----------------------------------------
+
+Tawara_On_Left:
+DEBUG "Tawara on left.", CR
+  PULSOUT lMotor, Fast_CW
+  PULSOUT rMotor, Fast_CCW
+  PAUSE 10
+  FOR temp = 1 TO 3
+    FOR pulses = 1 TO 4
+      PULSOUT lMotor, Fast_CCW
+      PULSOUT rMotor, Fast_CCW
+      PAUSE 15
+    NEXT
+
+    GOSUB Read_IR_Sensor
+  NEXT
+RETURN
+
+' -----[ Subroutine - Tawara_On_Right ]----------------------------------------
+
+Tawara_On_Right:
+DEBUG "Tawara on right.", CR
+  PULSOUT lMotor, Fast_CW
+  PULSOUT rMotor, Fast_CCW
+  PAUSE 10
+  FOR temp = 1 TO 3
+    FOR pulses = 1 TO 4
+      PULSOUT lMotor, Fast_CW
+      PULSOUT rMotor, Fast_CW
+      PAUSE 15
+    NEXT
+
+    GOSUB Read_IR_Sensor
+  NEXT
+RETURN
+
+' -----[ Subroutine - Read_Line_Sensor ]---------------------------------------
+
+Read_Line_Sensor:
+  lineBits = 0                                  ' reset sensor values
+  HIGH lLinePwr                                 ' activate sensors
+  HIGH rLinePwr
+  HIGH lLineIn                                  ' discharge caps
+  HIGH rLineIn
+  PAUSE 1
+  RCTIME lLineIn, 1, lLine                      ' read left sensor
+  RCTIME rLineIn, 1, rLine                      ' read right sensor
+
+  LOW lLinePwr                                ' deactivate sensors
+  LOW rLinePwr
+
+  ' convert readings to bits
+  LOOKDOWN lLine, >=[1000, 0], lLineBool        ' 0 = black, 1 = line
+  LOOKDOWN rLine, >=[1000, 0], rLineBool
+RETURN
+
+' -----[ Subroutine - Read_IR_Sensor ]-----------------------------------------
+
+Read_IR_Sensor:
+  enemyBits = 0
+  FREQOUT lEnemyOut, 1, 40000                 ' modulate left IR LED
+    lEnemyBool = ~lEnemyIn                    ' read input (1 = target)
+
+  FREQOUT rEnemyOut, 1, 40000                 ' modulate right IR LED
+    rEnemyBool = ~rEnemyIn                    ' read input (1 = target)
+RETURN
+GOTO Main
+
+Start_Match:
+  FOR pulses = 1 TO 11
+    DEBUG "right"
+      PULSOUT lMotor, Fast_CCW              ' Turn right
+      PULSOUT rMotor, Fast_CCW
+      PAUSE 20
+    NEXT
+  GOTO Main
